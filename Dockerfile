@@ -1,10 +1,15 @@
-FROM nginx:alpine
+FROM node:20-alpine
 
-# Kopiraj HTML datoteko v nginx root
-COPY index.html /usr/share/nginx/html/index.html
+WORKDIR /app
 
-# Expose port 80
-EXPOSE 80
+COPY package*.json ./
+RUN npm ci --omit=dev
 
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+COPY . .
+
+ENV NODE_ENV=production
+ENV PORT=3000
+
+EXPOSE 3000
+
+CMD ["npm", "start"]
