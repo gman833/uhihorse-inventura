@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>UHIHORSE Inventura - Prijava</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="login-container">
+    <div class="card login-card">
+      <div class="login-logo">
+        <div class="icon">🐴</div>
+        <h1>UHIHORSE</h1>
+        <p>Sistem za inventuro</p>
+      </div>
+
+      <div id="alert" class="alert alert-error" style="display:none"></div>
+
+      <div class="form-group">
+        <label for="username">Uporabniško ime</label>
+        <input type="text" id="username" class="form-control" autocomplete="username" autocapitalize="none">
+      </div>
+
+      <div class="form-group">
+        <label for="password">Geslo</label>
+        <input type="password" id="password" class="form-control" autocomplete="current-password">
+      </div>
+
+      <button id="loginBtn" class="btn btn-primary btn-lg" onclick="doLogin()">Prijava</button>
+    </div>
+  </div>
+
+  <script>
+    // Apply saved theme
+    (function() {
+      const saved = localStorage.getItem('uhihorse_theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', saved);
+    })();
+
+    // Redirect if already logged in
+    fetch('/api/auth/me').then(r => {
+      if (r.ok) return r.json();
+      throw new Error();
+    }).then(user => {
+      window.location.href = user.role === 'admin' ? '/admin' : '/scanner';
+    }).catch(() => {});
+
+    // Enter key
+    document.getElementById('password').addEventListener('keyup', e => {
+      if (e.key === 'Enter') doLogin();
+    });
+    document.getElementById('username').addEventListener('keyup', e => {
+      if (e.key === 'Enter') document.getElementById('password').focus();
+    });
+
+    async function doLogin() {
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      const alert = document.getElementById('alert');
+      const btn = document.getElementById('loginBtn');
+
+      if (!username || !password) {
+        alert.textContent = 'Vnesi uporabniško ime in geslo';
+        alert.style.display = 'block';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Prijavljam...';
+      alert.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          alert.textContent = data.error;
+          alert.style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = 'Prijava';
+          return;
+        }
+
+        window.location.href = data.role === 'admin' ? '/admin' : '/scanner';
+      } catch (err) {
+        alert.textContent = 'Napaka pri povezavi s strežnikom';
+        alert.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Prijava';
+      }
+    }
+  </script>
+</body>
+</html>

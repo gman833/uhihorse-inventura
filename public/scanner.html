@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>UHIHORSE - Skeniranje</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    /* ─── Compact camera ─── */
+    #qr-reader {
+      max-width: 280px;
+      margin: 0 auto 0.75rem;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 2px solid var(--border);
+    }
+    #qr-reader video { border-radius: 8px; }
+
+    /* ─── Offline banner ─── */
+    .offline-banner {
+      background: var(--warning);
+      color: #1a1a2e;
+      text-align: center;
+      padding: 0.4rem 0.75rem;
+      font-size: 0.8rem;
+      font-weight: 700;
+      display: none;
+    }
+    .offline-banner.show { display: block; }
+
+    .sync-banner {
+      background: rgba(0, 184, 148, 0.15);
+      border: 1px solid var(--success);
+      color: var(--success);
+      text-align: center;
+      padding: 0.35rem 0.75rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      border-radius: 6px;
+      margin-bottom: 0.75rem;
+      display: none;
+    }
+    .sync-banner.show { display: block; }
+
+    /* ─── Pending indicator ─── */
+    .pending-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background: var(--warning);
+      border-radius: 50%;
+      margin-right: 0.35rem;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    /* ─── Editable quantity in list ─── */
+    .scan-item {
+      display: flex;
+      align-items: center;
+      padding: 0.5rem 0.6rem;
+      border-bottom: 1px solid var(--border);
+      gap: 0.5rem;
+    }
+    .scan-item .sku {
+      font-family: 'Courier New', monospace;
+      font-weight: 600;
+      flex: 1;
+      font-size: 1.2rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .qty-edit {
+      display: flex;
+      align-items: center;
+      gap: 0.2rem;
+    }
+    .qty-btn {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      color: var(--text);
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      font-size: 1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .qty-btn:active { background: var(--accent); }
+    .qty-val {
+      min-width: 32px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+    .scan-item .time {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .scan-item .delete-btn {
+      background: none;
+      border: none;
+      color: var(--danger);
+      cursor: pointer;
+      font-size: 1rem;
+      padding: 0.15rem 0.3rem;
+      opacity: 0.5;
+    }
+    .scan-item .delete-btn:hover { opacity: 1; }
+
+    /* ─── Compact scan result ─── */
+    .scan-result {
+      background: rgba(0, 184, 148, 0.15);
+      border: 1px solid var(--success);
+      border-radius: 8px;
+      padding: 0.6rem 0.75rem;
+      margin-bottom: 0.75rem;
+      display: none;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .scan-result.show { display: flex; }
+    .scan-result .sku-value {
+      font-size: 1.6rem;
+      font-weight: 700;
+      font-family: 'Courier New', monospace;
+      flex: 1;
+    }
+    .qty-input {
+      width: 65px;
+      text-align: center;
+      font-size: 1.1rem;
+      font-weight: 700;
+      padding: 0.4rem;
+    }
+
+    /* ─── Pending queue count ─── */
+    .queue-count {
+      background: var(--warning);
+      color: #1a1a2e;
+      border-radius: 10px;
+      padding: 0.1rem 0.5rem;
+      font-size: 0.75rem;
+      font-weight: 700;
+      margin-left: 0.35rem;
+    }
+  </style>
+</head>
+<body>
+  <!-- Offline Banner -->
+  <div id="offlineBanner" class="offline-banner">
+    ⚠️ Brez povezave — skeniranja se shranjujejo lokalno
+  </div>
+
+  <!-- Top Bar -->
+  <div class="topbar">
+    <div class="topbar-brand">
+      <span>🐴</span> UHIHORSE
+      <span id="queueBadge" class="queue-count" style="display:none"></span>
+    </div>
+    <div class="topbar-user">
+      <span id="userName"></span>
+      <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn" title="Svetlo/temno">🌙</button>
+      <button class="btn btn-outline btn-sm" onclick="logout()">Odjava</button>
+    </div>
+  </div>
+
+  <div class="scanner-container">
+    <!-- Sync banner -->
+    <div id="syncBanner" class="sync-banner">
+      ✓ Vsa čakajoča skeniranja so bila uspešno sinhronizirana
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" data-tab="sessions" onclick="switchTab('sessions')">📋 Seje</button>
+      <button class="tab" data-tab="scanner" onclick="switchTab('scanner')">📷 Skener</button>
+    </div>
+
+    <!-- ═══ Sessions Tab ═══ -->
+    <div id="tab-sessions">
+      <button class="btn btn-primary btn-lg" style="width:100%;justify-content:center;margin-bottom:1rem" onclick="createSession()">
+        ➕ Nova seja skeniranja
+      </button>
+      <div id="sessionsList"></div>
+    </div>
+
+    <!-- ═══ Scanner Tab ═══ -->
+    <div id="tab-scanner" style="display:none">
+      <!-- Active session info -->
+      <div id="activeSessionInfo" class="card" style="margin-bottom:0.75rem;display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div style="font-weight:700;font-size:0.95rem" id="activeSessionName"></div>
+            <div style="font-size:0.8rem;color:var(--text-muted)" id="activeSessionMeta"></div>
+          </div>
+          <button class="btn btn-success btn-sm" onclick="completeSession()">✓ Zaključi</button>
+        </div>
+      </div>
+
+      <div id="noActiveSession" class="empty-state card">
+        <div class="icon">📋</div>
+        <p>Najprej ustvari ali izberi aktivno sejo</p>
+        <button class="btn btn-primary" style="margin-top:0.75rem" onclick="switchTab('sessions')">Pojdi na seje</button>
+      </div>
+
+      <!-- QR Scanner -->
+      <div id="scannerArea" style="display:none">
+        <div id="qr-reader"></div>
+
+        <!-- Manual SKU input -->
+        <div style="display:flex;gap:0.5rem;align-items:end;margin-bottom:0.75rem">
+          <div style="flex:1">
+            <input type="text" id="manualSku" class="form-control" placeholder="Ročni vnos SKU..." autocapitalize="none" style="font-size:0.9rem">
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="addManualSku()">Dodaj</button>
+        </div>
+
+        <!-- Last scanned item -->
+        <!-- Hand preference -->
+        <div style="display:flex;justify-content:flex-end;margin-bottom:0.5rem;gap:0.3rem">
+          <button id="handLeft" class="btn btn-sm" onclick="setHand('left')" style="font-size:0.75rem;padding:0.25rem 0.6rem">🤚 Leva</button>
+          <button id="handRight" class="btn btn-sm" onclick="setHand('right')" style="font-size:0.75rem;padding:0.25rem 0.6rem">Desna 🤚</button>
+        </div>
+
+        <div id="scanResult" class="scan-result">
+          <button class="btn btn-success scan-ok-btn" onclick="confirmScan()" style="padding:0.75rem 1.5rem;font-size:1.3rem;font-weight:700;border-radius:10px">✓ OK</button>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:0.7rem;color:var(--success);font-weight:600">SKENIRANO ✓</div>
+            <div class="sku-value" id="scannedSku"></div>
+          </div>
+          <input type="number" id="scanQty" class="form-control qty-input" value="1" min="1" max="9999">
+        </div>
+
+        <!-- Items list -->
+        <div class="card" style="padding:0.75rem">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;padding:0 0.2rem">
+            <h2 style="font-size:1rem;font-weight:700">Seznam <span style="color:var(--text-muted);font-weight:400" id="itemCount">(0)</span></h2>
+            <span id="pendingCount" style="font-size:0.75rem;color:var(--warning);display:none">
+              <span class="pending-dot"></span><span id="pendingNum">0</span> čaka
+            </span>
+          </div>
+          <input type="text" id="itemSearch" class="form-control" placeholder="🔍 Išči po SKU..." oninput="renderItems()" style="font-size:0.85rem;margin-bottom:0.5rem;padding:0.45rem 0.7rem" autocapitalize="none">
+          <div id="itemsList" class="scan-list" style="max-height:calc(30 * 2.8rem);overflow-y:auto"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Session Detail Modal -->
+  <div id="sessionModal" class="modal-overlay" onclick="if(event.target===this)closeModal('sessionModal')">
+    <div class="modal">
+      <h3>
+        <span id="modalSessionName"></span>
+        <button class="modal-close" onclick="closeModal('sessionModal')">×</button>
+      </h3>
+      <div id="modalSessionItems" class="scan-list"></div>
+      <div style="margin-top:1rem;display:flex;gap:0.5rem">
+        <button class="btn btn-danger btn-sm" onclick="deleteSession()">🗑 Izbriši sejo</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script>
+    // ═══════════════════════════════════════════════════════════════
+    // OFFLINE-FIRST SYNC ENGINE
+    // All scan operations go to localStorage first, then sync to server.
+    // This ensures zero data loss even with network interruptions.
+    // ═══════════════════════════════════════════════════════════════
+
+    const QUEUE_KEY = 'uhihorse_offline_queue';
+    const LOCAL_ITEMS_KEY = 'uhihorse_local_items';
+    let isOnline = navigator.onLine;
+    let syncInProgress = false;
+    let syncTimer = null;
+
+    // ─── Queue Management ─────────────────────────────────────
+    function getQueue() {
+      try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); }
+      catch { return []; }
+    }
+
+    function saveQueue(queue) {
+      localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+      updateQueueUI();
+    }
+
+    function addToQueue(action) {
+      const queue = getQueue();
+      action.id = Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+      action.timestamp = new Date().toISOString();
+      queue.push(action);
+      saveQueue(queue);
+      triggerSync();
+    }
+
+    function removeFromQueue(actionId) {
+      const queue = getQueue().filter(a => a.id !== actionId);
+      saveQueue(queue);
+    }
+
+    // ─── Local Items Cache ────────────────────────────────────
+    // We keep a local mirror of items for instant UI updates
+    function getLocalItems(sessionId) {
+      try {
+        const all = JSON.parse(localStorage.getItem(LOCAL_ITEMS_KEY) || '{}');
+        return all[sessionId] || [];
+      } catch { return []; }
+    }
+
+    function setLocalItems(sessionId, items) {
+      try {
+        const all = JSON.parse(localStorage.getItem(LOCAL_ITEMS_KEY) || '{}');
+        all[sessionId] = items;
+        localStorage.setItem(LOCAL_ITEMS_KEY, JSON.stringify(all));
+      } catch {}
+    }
+
+    function addLocalItem(sessionId, sku, quantity) {
+      const items = getLocalItems(sessionId);
+      const localItem = {
+        id: 'local_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        session_id: sessionId,
+        sku: sku,
+        quantity: quantity,
+        scanned_at: new Date().toISOString(),
+        pending: true
+      };
+      items.unshift(localItem);
+      setLocalItems(sessionId, items);
+      return localItem;
+    }
+
+    function updateLocalItemQty(sessionId, itemId, newQty) {
+      const items = getLocalItems(sessionId);
+      const item = items.find(i => String(i.id) === String(itemId));
+      if (item) {
+        item.quantity = newQty;
+        item.qtyPending = true;
+        setLocalItems(sessionId, items);
+      }
+    }
+
+    function removeLocalItem(sessionId, itemId) {
+      const items = getLocalItems(sessionId).filter(i => String(i.id) !== String(itemId));
+      setLocalItems(sessionId, items);
+    }
+
+    // ─── Sync Engine ──────────────────────────────────────────
+    async function triggerSync() {
+      if (syncTimer) clearTimeout(syncTimer);
+      syncTimer = setTimeout(processQueue, 500);
+    }
+
+    async function processQueue() {
+      if (syncInProgress || !navigator.onLine) return;
+      const queue = getQueue();
+      if (!queue.length) return;
+
+      syncInProgress = true;
+
+      for (const action of queue) {
+        try {
+          let res;
+          switch (action.type) {
+            case 'add_item':
+              res = await fetch(`/api/sessions/${action.sessionId}/items`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sku: action.sku, quantity: action.quantity })
+              });
+              if (res.ok) {
+                const serverItem = await res.json();
+                // Update local cache: replace local ID with server ID
+                const items = getLocalItems(action.sessionId);
+                const idx = items.findIndex(i => String(i.id) === String(action.localItemId));
+                if (idx >= 0) {
+                  items[idx] = { ...serverItem, pending: false };
+                  setLocalItems(action.sessionId, items);
+                }
+                removeFromQueue(action.id);
+              } else if (res.status === 401) {
+                // Session expired, stop trying
+                syncInProgress = false;
+                return;
+              } else {
+                throw new Error(`Server error ${res.status}`);
+              }
+              break;
+
+            case 'update_qty':
+              res = await fetch(`/api/items/${action.itemId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ quantity: action.quantity })
+              });
+              if (res.ok) {
+                const items = getLocalItems(action.sessionId);
+                const item = items.find(i => String(i.id) === String(action.itemId));
+                if (item) { item.qtyPending = false; setLocalItems(action.sessionId, items); }
+                removeFromQueue(action.id);
+              } else if (res.status === 401) {
+                syncInProgress = false;
+                return;
+              } else {
+                throw new Error(`Server error ${res.status}`);
+              }
+              break;
+
+            case 'delete_item':
+              res = await fetch(`/api/items/${action.itemId}`, { method: 'DELETE' });
+              if (res.ok || res.status === 404) {
+                removeFromQueue(action.id);
+              } else if (res.status === 401) {
+                syncInProgress = false;
+                return;
+              } else {
+                throw new Error(`Server error ${res.status}`);
+              }
+              break;
+          }
+        } catch (err) {
+          console.warn('Sync failed for action, will retry:', action.type, err.message);
+          break; // Stop processing, retry later
+        }
+      }
+
+      syncInProgress = false;
+
+      // Check if there's still items in queue
+      const remaining = getQueue();
+      if (remaining.length > 0 && navigator.onLine) {
+        syncTimer = setTimeout(processQueue, 3000); // Retry in 3s
+      } else if (remaining.length === 0) {
+        // All synced! Refresh from server to get authoritative data
+        await refreshFromServer();
+        showSyncSuccess();
+      }
+
+      renderItems();
+    }
+
+    async function refreshFromServer() {
+      if (!activeSessionId || !navigator.onLine) return;
+      try {
+        const res = await fetch(`/api/sessions/${activeSessionId}/items`);
+        if (res.ok) {
+          const serverItems = await res.json();
+          setLocalItems(activeSessionId, serverItems.map(i => ({ ...i, pending: false })));
+        }
+      } catch {}
+    }
+
+    function showSyncSuccess() {
+      const banner = document.getElementById('syncBanner');
+      banner.classList.add('show');
+      setTimeout(() => banner.classList.remove('show'), 3000);
+    }
+
+    // ─── Online/Offline Detection ─────────────────────────────
+    function updateOnlineStatus() {
+      isOnline = navigator.onLine;
+      document.getElementById('offlineBanner').classList.toggle('show', !isOnline);
+      if (isOnline) triggerSync();
+    }
+
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+
+    function updateQueueUI() {
+      const queue = getQueue();
+      const badge = document.getElementById('queueBadge');
+      const pendingEl = document.getElementById('pendingCount');
+      const pendingNum = document.getElementById('pendingNum');
+
+      if (queue.length > 0) {
+        badge.textContent = queue.length;
+        badge.style.display = '';
+        if (pendingEl) { pendingEl.style.display = ''; pendingNum.textContent = queue.length; }
+      } else {
+        badge.style.display = 'none';
+        if (pendingEl) pendingEl.style.display = 'none';
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // APPLICATION LOGIC
+    // ═══════════════════════════════════════════════════════════════
+
+    let currentUser = null;
+    let activeSessionId = null;
+    let scanner = null;
+    let lastScannedSku = null;
+    let lastScanTime = 0;
+    let viewingSessionId = null;
+
+    // ─── Auth ─────────────────────────────────────────────────
+    async function checkAuth() {
+      try {
+        const res = await fetch('/api/auth/me');
+        if (!res.ok) throw new Error();
+        currentUser = await res.json();
+        document.getElementById('userName').textContent = currentUser.displayName;
+        loadSessions();
+        updateQueueUI();
+        // Try syncing any pending items
+        triggerSync();
+      } catch {
+        window.location.href = '/login';
+      }
+    }
+
+    async function logout() {
+      // Warn if there are pending items
+      const queue = getQueue();
+      if (queue.length > 0) {
+        if (!confirm(`Imaš ${queue.length} nesinhroniziranih skeniranj. Če se odjaviš, bodo izgubljena. Nadaljuj?`)) return;
+      }
+      await fetch('/api/auth/logout', { method: 'POST' });
+      window.location.href = '/login';
+    }
+
+    // ─── Tabs ─────────────────────────────────────────────────
+    function switchTab(tab) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+      document.getElementById('tab-sessions').style.display = tab === 'sessions' ? '' : 'none';
+      document.getElementById('tab-scanner').style.display = tab === 'scanner' ? '' : 'none';
+
+      if (tab === 'scanner') updateScannerView();
+      if (tab === 'sessions') { loadSessions(); stopScanner(); }
+    }
+
+    // ─── Sessions ─────────────────────────────────────────────
+    async function loadSessions() {
+      try {
+        const res = await fetch('/api/sessions');
+        if (!res.ok) throw new Error();
+        const sessions = await res.json();
+
+        const container = document.getElementById('sessionsList');
+        if (!sessions.length) {
+          container.innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>Še nimaš nobene seje</p></div>';
+          return;
+        }
+
+        container.innerHTML = sessions.map(s => `
+          <div class="session-card ${s.status === 'active' ? 'active-session' : ''}" onclick="onSessionClick(${s.id}, '${s.status}')">
+            <div class="session-info">
+              <div class="name">${esc(s.name)}</div>
+              <div class="meta">${s.item_count || 0} artiklov · ${s.total_quantity || 0} kos · ${formatDate(s.created_at)}</div>
+            </div>
+            <span class="badge ${s.status === 'active' ? 'badge-active' : 'badge-completed'}">
+              ${s.status === 'active' ? 'Aktivna' : 'Zaključena'}
+            </span>
+          </div>
+        `).join('');
+      } catch {
+        // Offline - show cached info
+      }
+    }
+
+    async function createSession() {
+      const name = prompt('Ime seje (opcijsko):');
+      if (name === null) return;
+
+      try {
+        const res = await fetch('/api/sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name || undefined })
+        });
+        if (!res.ok) throw new Error();
+        const session = await res.json();
+        activeSessionId = session.id;
+        switchTab('scanner');
+      } catch {
+        alert('Napaka pri ustvarjanju seje. Preveri povezavo.');
+      }
+    }
+
+    function onSessionClick(id, status) {
+      if (status === 'active') {
+        activeSessionId = id;
+        switchTab('scanner');
+      } else {
+        viewSessionDetail(id);
+      }
+    }
+
+    async function viewSessionDetail(id) {
+      viewingSessionId = id;
+      try {
+        const res = await fetch(`/api/sessions/${id}/items`);
+        const items = await res.json();
+
+        const sessRes = await fetch('/api/sessions');
+        const sessions = await sessRes.json();
+        const sess = sessions.find(s => s.id === id);
+
+        document.getElementById('modalSessionName').textContent = sess ? sess.name : `Seja #${id}`;
+        document.getElementById('modalSessionItems').innerHTML = items.length
+          ? items.map(i => `
+            <div class="scan-item">
+              <span class="sku">${esc(i.sku)}</span>
+              <span class="qty-val">${i.quantity}×</span>
+              <span class="time">${formatTime(i.scanned_at)}</span>
+            </div>
+          `).join('')
+          : '<div class="empty-state"><p>Ni artiklov</p></div>';
+
+        document.getElementById('sessionModal').classList.add('show');
+      } catch {}
+    }
+
+    async function deleteSession() {
+      if (!confirm('Res želiš izbrisati to sejo in vse artikle?')) return;
+      await fetch(`/api/sessions/${viewingSessionId}`, { method: 'DELETE' });
+      closeModal('sessionModal');
+      if (viewingSessionId === activeSessionId) activeSessionId = null;
+      loadSessions();
+    }
+
+    async function completeSession() {
+      const queue = getQueue().filter(a => a.sessionId === activeSessionId);
+      if (queue.length > 0) {
+        alert(`Počakaj — ${queue.length} skeniranj čaka na sinhronizacijo. Zaključi sejo ko so vsa skeniranja sinhronizirana.`);
+        return;
+      }
+      if (!confirm('Zaključi sejo? Po zaključku ne moreš več dodajati artiklov.')) return;
+      await fetch(`/api/sessions/${activeSessionId}/complete`, { method: 'PUT' });
+      activeSessionId = null;
+      updateScannerView();
+      loadSessions();
+    }
+
+    // ─── Scanner View ─────────────────────────────────────────
+    function updateScannerView() {
+      const hasSession = !!activeSessionId;
+      document.getElementById('activeSessionInfo').style.display = hasSession ? '' : 'none';
+      document.getElementById('noActiveSession').style.display = hasSession ? 'none' : '';
+      document.getElementById('scannerArea').style.display = hasSession ? '' : 'none';
+
+      if (hasSession) {
+        loadSessionInfo();
+        loadAndRenderItems();
+        startScanner();
+      }
+    }
+
+    async function loadSessionInfo() {
+      try {
+        const res = await fetch('/api/sessions');
+        if (!res.ok) throw new Error();
+        const sessions = await res.json();
+        const sess = sessions.find(s => s.id === activeSessionId);
+        if (sess) {
+          document.getElementById('activeSessionName').textContent = sess.name;
+          document.getElementById('activeSessionMeta').textContent = `${sess.item_count || 0} artiklov · ${sess.total_quantity || 0} kos`;
+        }
+      } catch {}
+    }
+
+    // ─── QR Scanner ───────────────────────────────────────────
+    function startScanner() {
+      if (scanner) return;
+
+      scanner = new Html5Qrcode('qr-reader');
+      scanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 200, height: 200 }, aspectRatio: 1 },
+        onScanSuccess,
+        () => {}
+      ).then(() => {
+        // Apply 1.5x zoom if camera supports it
+        try {
+          const videoEl = document.querySelector('#qr-reader video');
+          if (videoEl && videoEl.srcObject) {
+            const track = videoEl.srcObject.getVideoTracks()[0];
+            const caps = track.getCapabilities ? track.getCapabilities() : {};
+            if (caps.zoom) {
+              const zoom = Math.min(2.0, caps.zoom.max);
+              track.applyConstraints({ advanced: [{ zoom }] });
+              console.log(`✅ Camera zoom set to ${zoom}x`);
+            } else {
+              // Fallback: CSS zoom (less ideal but works everywhere)
+              videoEl.style.transform = 'scale(2.0)';
+              videoEl.style.transformOrigin = 'center center';
+              console.log('ℹ️ Native zoom not supported, using CSS fallback');
+            }
+          }
+        } catch (e) { console.warn('Zoom not available:', e); }
+      }).catch(err => {
+        console.warn('Camera error:', err);
+        document.getElementById('qr-reader').innerHTML =
+          '<div class="empty-state" style="padding:0.75rem"><p style="font-size:0.85rem">📷 Kamera ni dostopna.<br>Uporabi ročni vnos spodaj.</p></div>';
+      });
+    }
+
+    function stopScanner() {
+      if (scanner) {
+        scanner.stop().catch(() => {});
+        scanner = null;
+        document.getElementById('qr-reader').innerHTML = '';
+      }
+    }
+
+    // ─── Theme Toggle ──────────────────────────────────────
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme');
+      const next = current === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('uhihorse_theme', next);
+      document.getElementById('themeBtn').textContent = next === 'light' ? '☀️' : '🌙';
+    }
+
+    function applyTheme() {
+      const saved = localStorage.getItem('uhihorse_theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', saved);
+      document.getElementById('themeBtn').textContent = saved === 'light' ? '☀️' : '🌙';
+    }
+    applyTheme();
+
+    // ─── Hand Preference ─────────────────────────────────────
+    function setHand(hand) {
+      localStorage.setItem('uhihorse_hand', hand);
+      applyHand(hand);
+    }
+
+    function applyHand(hand) {
+      const row = document.getElementById('scanResult');
+      if (hand === 'right') {
+        row.style.flexDirection = 'row-reverse';
+      } else {
+        row.style.flexDirection = 'row';
+      }
+      document.getElementById('handLeft').className = `btn btn-sm ${hand === 'left' ? 'btn-primary' : 'btn-outline'}`;
+      document.getElementById('handRight').className = `btn btn-sm ${hand === 'right' ? 'btn-primary' : 'btn-outline'}`;
+    }
+
+    // Init hand preference
+    applyHand(localStorage.getItem('uhihorse_hand') || 'left');
+
+    // ─── Beep Sound ──────────────────────────────────────────
+    let audioCtx = null;
+    function beep(freq = 880, duration = 120, volume = 0.3) {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.value = volume;
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration / 1000);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration / 1000);
+      } catch {}
+    }
+
+    function tadamSound() {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const t = audioCtx.currentTime;
+        // Note 1: C5
+        const o1 = audioCtx.createOscillator();
+        const g1 = audioCtx.createGain();
+        o1.connect(g1); g1.connect(audioCtx.destination);
+        o1.type = 'sine'; o1.frequency.value = 523;
+        g1.gain.setValueAtTime(0.25, t);
+        g1.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+        o1.start(t); o1.stop(t + 0.15);
+        // Note 2: E5 (higher, brighter)
+        const o2 = audioCtx.createOscillator();
+        const g2 = audioCtx.createGain();
+        o2.connect(g2); g2.connect(audioCtx.destination);
+        o2.type = 'sine'; o2.frequency.value = 659;
+        g2.gain.setValueAtTime(0.25, t + 0.12);
+        g2.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+        o2.start(t + 0.12); o2.stop(t + 0.3);
+        // Note 3: G5 (resolve chord)
+        const o3 = audioCtx.createOscillator();
+        const g3 = audioCtx.createGain();
+        o3.connect(g3); g3.connect(audioCtx.destination);
+        o3.type = 'sine'; o3.frequency.value = 784;
+        g3.gain.setValueAtTime(0.3, t + 0.22);
+        g3.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+        o3.start(t + 0.22); o3.stop(t + 0.5);
+      } catch {}
+    }
+
+    function onScanSuccess(decodedText) {
+      // Prevent duplicate scans (same code within 2 seconds)
+      const now = Date.now();
+      if (decodedText === lastScannedSku && (now - lastScanTime) < 2000) return;
+      lastScannedSku = decodedText;
+      lastScanTime = now;
+
+      // Beep + vibrate
+      beep();
+      if (navigator.vibrate) navigator.vibrate(100);
+
+      document.getElementById('scannedSku').textContent = decodedText;
+      document.getElementById('scanQty').value = 1;
+      document.getElementById('scanResult').classList.add('show');
+      document.getElementById('scanQty').focus();
+    }
+
+    function confirmScan() {
+      const sku = document.getElementById('scannedSku').textContent;
+      const qty = parseInt(document.getElementById('scanQty').value) || 1;
+      addItem(sku, qty);
+      tadamSound();
+      document.getElementById('scanResult').classList.remove('show');
+      lastScannedSku = null;
+    }
+
+    function addManualSku() {
+      const input = document.getElementById('manualSku');
+      const sku = input.value.trim();
+      if (!sku) return;
+      addItem(sku, 1);
+      tadamSound();
+      input.value = '';
+      input.focus();
+    }
+
+    document.getElementById('manualSku').addEventListener('keyup', e => {
+      if (e.key === 'Enter') addManualSku();
+    });
+
+    // ─── Items (Offline-First) ────────────────────────────────
+    function addItem(sku, quantity) {
+      // 1. Add to local cache immediately
+      const localItem = addLocalItem(activeSessionId, sku, quantity);
+
+      // 2. Queue for server sync
+      addToQueue({
+        type: 'add_item',
+        sessionId: activeSessionId,
+        sku: sku,
+        quantity: quantity,
+        localItemId: localItem.id
+      });
+
+      // 3. Update UI instantly
+      renderItems();
+    }
+
+    function changeQty(itemId, delta) {
+      const items = getLocalItems(activeSessionId);
+      const item = items.find(i => String(i.id) === String(itemId));
+      if (!item) return;
+
+      const newQty = Math.max(1, item.quantity + delta);
+      if (newQty === item.quantity) return;
+
+      // Update local
+      updateLocalItemQty(activeSessionId, itemId, newQty);
+
+      // Queue if it's a server item (not a local-only one)
+      if (!String(itemId).startsWith('local_')) {
+        // Remove any previous qty update for this item from queue (debounce)
+        const queue = getQueue().filter(a => !(a.type === 'update_qty' && String(a.itemId) === String(itemId)));
+        saveQueue(queue);
+
+        addToQueue({
+          type: 'update_qty',
+          sessionId: activeSessionId,
+          itemId: itemId,
+          quantity: newQty
+        });
+      } else {
+        // Local item — update the add_item in queue
+        const queue = getQueue();
+        const addAction = queue.find(a => a.type === 'add_item' && a.localItemId === itemId);
+        if (addAction) {
+          addAction.quantity = newQty;
+          saveQueue(queue);
+        }
+      }
+
+      renderItems();
+    }
+
+    function deleteItem(itemId) {
+      if (!confirm('Izbriši ta artikel?')) return;
+
+      // Remove from local
+      removeLocalItem(activeSessionId, itemId);
+
+      if (!String(itemId).startsWith('local_')) {
+        // Server item — queue delete
+        addToQueue({
+          type: 'delete_item',
+          sessionId: activeSessionId,
+          itemId: itemId
+        });
+      } else {
+        // Local only — remove the add from queue
+        const queue = getQueue().filter(a => !(a.type === 'add_item' && a.localItemId === itemId));
+        saveQueue(queue);
+      }
+
+      renderItems();
+    }
+
+    async function loadAndRenderItems() {
+      // Load from server if online
+      if (navigator.onLine) {
+        try {
+          const res = await fetch(`/api/sessions/${activeSessionId}/items`);
+          if (res.ok) {
+            const serverItems = await res.json();
+            // Merge: keep local pending items, update synced ones
+            const localItems = getLocalItems(activeSessionId);
+            const pendingItems = localItems.filter(i => i.pending && String(i.id).startsWith('local_'));
+            const merged = [...pendingItems, ...serverItems.map(i => ({ ...i, pending: false }))];
+            setLocalItems(activeSessionId, merged);
+          }
+        } catch {}
+      }
+      renderItems();
+    }
+
+    function renderItems() {
+      const allItems = getLocalItems(activeSessionId);
+      const searchVal = (document.getElementById('itemSearch')?.value || '').trim().toLowerCase();
+      const items = searchVal ? allItems.filter(i => i.sku.toLowerCase().includes(searchVal)) : allItems;
+      const container = document.getElementById('itemsList');
+      const countEl = document.getElementById('itemCount');
+
+      countEl.textContent = searchVal ? `(${items.length}/${allItems.length})` : `(${allItems.length})`;
+
+      if (!allItems.length) {
+        container.innerHTML = '<div class="empty-state" style="padding:1.5rem"><div style="font-size:2rem;margin-bottom:0.3rem">📦</div><p style="font-size:0.85rem">Skeniraj QR kodo za začetek</p></div>';
+        return;
+      }
+
+      if (!items.length) {
+        container.innerHTML = '<div class="empty-state" style="padding:1rem"><p style="font-size:0.85rem">Ni zadetkov za "' + esc(searchVal) + '"</p></div>';
+        return;
+      }
+
+      container.innerHTML = items.map(i => `
+        <div class="scan-item">
+          ${i.pending ? '<span class="pending-dot" title="Čaka na sinhronizacijo"></span>' : ''}
+          <span class="sku">${esc(i.sku)}</span>
+          <div class="qty-edit">
+            <button class="qty-btn" onclick="changeQty('${i.id}', -1)" ${i.quantity <= 1 ? 'disabled style="opacity:0.3"' : ''}>−</button>
+            <span class="qty-val">${i.quantity}</span>
+            <button class="qty-btn" onclick="changeQty('${i.id}', 1)">+</button>
+          </div>
+          <span class="time">${formatTime(i.scanned_at)}</span>
+          <button class="delete-btn" onclick="deleteItem('${i.id}')" title="Izbriši">✕</button>
+        </div>
+      `).join('');
+
+      updateQueueUI();
+      loadSessionInfo();
+    }
+
+    // ─── Utils ────────────────────────────────────────────────
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('show');
+    }
+
+    function esc(s) {
+      if (!s) return '';
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function formatDate(d) {
+      if (!d) return '';
+      const dt = d.includes('Z') ? new Date(d) : new Date(d + 'Z');
+      return dt.toLocaleDateString('sl-SI', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function formatTime(d) {
+      if (!d) return '';
+      const dt = d.includes('Z') ? new Date(d) : new Date(d + 'Z');
+      return dt.toLocaleTimeString('sl-SI', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // ─── Periodic sync retry ──────────────────────────────────
+    setInterval(() => {
+      if (navigator.onLine && getQueue().length > 0) {
+        triggerSync();
+      }
+    }, 10000); // Retry every 10s
+
+    // ─── Init ─────────────────────────────────────────────────
+    updateOnlineStatus();
+    checkAuth();
+  </script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>UHIHORSE Inventura</title>
+  <script>
+    fetch('/api/auth/me').then(r => {
+      if (r.ok) return r.json();
+      throw new Error();
+    }).then(user => {
+      window.location.href = user.role === 'admin' ? '/admin' : '/scanner';
+    }).catch(() => {
+      window.location.href = '/login';
+    });
+  </script>
+</head>
+<body style="background:#1a1a2e">
+<script>
+  (function(){var t=localStorage.getItem('uhihorse_theme')||'dark';document.documentElement.setAttribute('data-theme',t);if(t==='light')document.body.style.background='#f0f2f5';})();
+</script>
+</body>
+</html>

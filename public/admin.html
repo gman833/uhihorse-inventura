@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>UHIHORSE - Admin</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <!-- Top Bar -->
+  <div class="topbar">
+    <div class="topbar-brand">
+      <span>🐴</span> UHIHORSE <span style="font-size:0.75rem;color:var(--text-muted);margin-left:0.5rem">ADMIN</span>
+    </div>
+    <div class="topbar-user">
+      <span id="userName"></span>
+      <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn" title="Svetlo/temno">🌙</button>
+      <button class="btn btn-outline btn-sm" onclick="logout()">Odjava</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- Stats -->
+    <div class="grid-4" id="statsGrid" style="margin-bottom:1.25rem"></div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" data-tab="sessions" onclick="switchTab('sessions')">📋 Seje</button>
+      <button class="tab" data-tab="items" onclick="switchTab('items')">📦 Artikli</button>
+      <button class="tab" data-tab="users" onclick="switchTab('users')">👥 Uporabniki</button>
+      <button class="tab" data-tab="export" onclick="switchTab('export')">📥 Izvoz</button>
+    </div>
+
+    <!-- ═══ Sessions Tab ═══ -->
+    <div id="tab-sessions">
+      <div class="filter-bar">
+        <select id="filterUser" class="form-control" onchange="loadSessions()">
+          <option value="">Vsi uporabniki</option>
+        </select>
+        <select id="filterStatus" class="form-control" onchange="loadSessions()">
+          <option value="">Vsi statusi</option>
+          <option value="active">Aktivne</option>
+          <option value="completed">Zaključene</option>
+        </select>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Uporabnik</th>
+                <th>Seja</th>
+                <th>Status</th>
+                <th>Artiklov</th>
+                <th>Količina</th>
+                <th>Ustvarjena</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="sessionsTable"></tbody>
+          </table>
+        </div>
+        <div id="sessionsEmpty" class="empty-state" style="display:none">
+          <p>Ni sej</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ Items Tab ═══ -->
+    <div id="tab-items" style="display:none">
+      <div class="filter-bar">
+        <div style="flex:1;min-width:200px">
+          <input type="text" id="itemsSearch" class="form-control" placeholder="🔍 Išči po SKU..." oninput="debounceLoadItems()" autocapitalize="none">
+        </div>
+        <select id="itemsFilterUser" class="form-control" onchange="loadAllItems()">
+          <option value="">Vsi uporabniki</option>
+        </select>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem">
+          <span style="font-size:0.85rem;color:var(--text-muted)" id="itemsResultCount"></span>
+        </div>
+        <div class="table-wrap" style="max-height:calc(30 * 2.4rem);overflow-y:auto">
+          <table>
+            <thead style="position:sticky;top:0;z-index:1">
+              <tr>
+                <th>SKU</th>
+                <th>Količina</th>
+                <th>Uporabnik</th>
+                <th>Seja</th>
+                <th>Status</th>
+                <th>Skenirano</th>
+              </tr>
+            </thead>
+            <tbody id="allItemsTable"></tbody>
+          </table>
+        </div>
+        <div id="allItemsEmpty" class="empty-state" style="display:none">
+          <p>Ni zadetkov</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ Users Tab ═══ -->
+    <div id="tab-users" style="display:none">
+      <div class="actions-bar">
+        <button class="btn btn-primary" onclick="openCreateUser()">➕ Nov uporabnik</button>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Ime</th>
+                <th>Username</th>
+                <th>Vloga</th>
+                <th>Seje</th>
+                <th>Skenirano</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="usersTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ Export Tab ═══ -->
+    <div id="tab-export" style="display:none">
+      <div class="card">
+        <h3 style="margin-bottom:1rem">📥 Izvoz podatkov</h3>
+        <p style="color:var(--text-muted);margin-bottom:1.25rem">
+          Izvozi vsa skeniranja vseh uporabnikov v eno datoteko. Uporabi filtre za omejitev podatkov.
+        </p>
+
+        <div class="grid-2" style="margin-bottom:1rem">
+          <div class="form-group">
+            <label>Uporabnik</label>
+            <select id="exportUser" class="form-control">
+              <option value="">Vsi uporabniki</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Status seje</label>
+            <select id="exportStatus" class="form-control">
+              <option value="">Vsi</option>
+              <option value="active">Aktivne</option>
+              <option value="completed">Zaključene</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Od datuma</label>
+            <input type="date" id="exportFrom" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>Do datuma</label>
+            <input type="date" id="exportTo" class="form-control">
+          </div>
+        </div>
+
+        <div style="display:flex;gap:0.75rem;flex-wrap:wrap">
+          <button class="btn btn-success btn-lg" onclick="doExport('xlsx')">
+            📊 Izvozi XLSX
+          </button>
+          <button class="btn btn-primary btn-lg" onclick="doExport('csv')">
+            📄 Izvozi CSV
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Session Detail Modal -->
+  <div id="sessionModal" class="modal-overlay" onclick="if(event.target===this)closeModal('sessionModal')">
+    <div class="modal">
+      <h3>
+        <span id="modalSessionName"></span>
+        <button class="modal-close" onclick="closeModal('sessionModal')">×</button>
+      </h3>
+      <div style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.75rem" id="modalSessionMeta"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>SKU</th><th>Količina</th><th>Čas</th></tr>
+          </thead>
+          <tbody id="modalItems"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create/Edit User Modal -->
+  <div id="userModal" class="modal-overlay" onclick="if(event.target===this)closeModal('userModal')">
+    <div class="modal">
+      <h3>
+        <span id="userModalTitle">Nov uporabnik</span>
+        <button class="modal-close" onclick="closeModal('userModal')">×</button>
+      </h3>
+      <div id="userAlert" class="alert alert-error" style="display:none"></div>
+
+      <div class="form-group">
+        <label>Prikazno ime</label>
+        <input type="text" id="userDisplayName" class="form-control" placeholder="npr. Janez Novak">
+      </div>
+      <div class="form-group">
+        <label>Uporabniško ime</label>
+        <input type="text" id="userUsername" class="form-control" placeholder="npr. janez" autocapitalize="none">
+      </div>
+      <div class="form-group">
+        <label id="userPasswordLabel">Geslo</label>
+        <input type="password" id="userPassword" class="form-control">
+      </div>
+      <div class="form-group">
+        <label>Vloga</label>
+        <select id="userRole" class="form-control">
+          <option value="user">Uporabnik</option>
+          <option value="admin">Administrator</option>
+        </select>
+      </div>
+
+      <div style="display:flex;gap:0.5rem;margin-top:1rem">
+        <button class="btn btn-primary" id="userSaveBtn" onclick="saveUser()">Shrani</button>
+        <button class="btn btn-outline" onclick="closeModal('userModal')">Prekliči</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentUser = null;
+    let editingUserId = null;
+    let users = [];
+
+    // ─── Auth ─────────────────────────────────────────────────
+    async function checkAuth() {
+      try {
+        const res = await fetch('/api/auth/me');
+        if (!res.ok) throw new Error();
+        currentUser = await res.json();
+        if (currentUser.role !== 'admin') {
+          window.location.href = '/scanner';
+          return;
+        }
+        document.getElementById('userName').textContent = currentUser.displayName;
+        loadStats();
+        loadUsers();
+        loadSessions();
+      } catch {
+        window.location.href = '/login';
+      }
+    }
+
+    async function logout() {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      window.location.href = '/login';
+    }
+
+    // ─── Tabs ─────────────────────────────────────────────────
+    function switchTab(tab) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+      ['sessions', 'items', 'users', 'export'].forEach(t => {
+        document.getElementById('tab-' + t).style.display = t === tab ? '' : 'none';
+      });
+      if (tab === 'items') loadAllItems();
+    }
+
+    // ─── Stats ────────────────────────────────────────────────
+    async function loadStats() {
+      const res = await fetch('/api/admin/stats');
+      const s = await res.json();
+      document.getElementById('statsGrid').innerHTML = `
+        <div class="card stat-card"><div class="value">${s.activeUsers}</div><div class="label">Aktivnih uporabnikov</div></div>
+        <div class="card stat-card"><div class="value">${s.totalSessions}</div><div class="label">Skupaj sej</div></div>
+        <div class="card stat-card"><div class="value">${s.totalScans}</div><div class="label">Skupaj artiklov</div></div>
+        <div class="card stat-card"><div class="value">${s.totalQuantity}</div><div class="label">Skupaj količina</div></div>
+      `;
+    }
+
+    // ─── Users ────────────────────────────────────────────────
+    async function loadUsers() {
+      const res = await fetch('/api/admin/users');
+      users = await res.json();
+
+      // Populate filter dropdowns
+      const userOpts = users.filter(u => u.role === 'user').map(u =>
+        `<option value="${u.id}">${esc(u.display_name)}</option>`
+      ).join('');
+
+      document.getElementById('filterUser').innerHTML = '<option value="">Vsi uporabniki</option>' + userOpts;
+      document.getElementById('exportUser').innerHTML = '<option value="">Vsi uporabniki</option>' + userOpts;
+      populateItemsUserFilter();
+
+      // Users table
+      document.getElementById('usersTable').innerHTML = users.map(u => `
+        <tr>
+          <td><strong>${esc(u.display_name)}</strong></td>
+          <td style="font-family:monospace">${esc(u.username)}</td>
+          <td><span class="badge badge-${u.role}">${u.role === 'admin' ? 'Admin' : 'User'}</span></td>
+          <td>${u.session_count}</td>
+          <td>${u.total_scans}</td>
+          <td><span class="badge ${u.active ? 'badge-active' : 'badge-inactive'}">${u.active ? 'Aktiven' : 'Neaktiven'}</span></td>
+          <td>
+            <button class="btn btn-outline btn-sm" onclick="editUser(${u.id})">✏️</button>
+            ${u.id !== currentUser.id ? `<button class="btn btn-outline btn-sm" onclick="toggleActive(${u.id}, ${u.active})" title="${u.active ? 'Deaktiviraj' : 'Aktiviraj'}">${u.active ? '🔒' : '🔓'}</button>` : ''}
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function openCreateUser() {
+      editingUserId = null;
+      document.getElementById('userModalTitle').textContent = 'Nov uporabnik';
+      document.getElementById('userDisplayName').value = '';
+      document.getElementById('userUsername').value = '';
+      document.getElementById('userUsername').disabled = false;
+      document.getElementById('userPassword').value = '';
+      document.getElementById('userPasswordLabel').textContent = 'Geslo';
+      document.getElementById('userRole').value = 'user';
+      document.getElementById('userAlert').style.display = 'none';
+      document.getElementById('userModal').classList.add('show');
+    }
+
+    function editUser(id) {
+      const u = users.find(x => x.id === id);
+      if (!u) return;
+      editingUserId = id;
+      document.getElementById('userModalTitle').textContent = 'Uredi uporabnika';
+      document.getElementById('userDisplayName').value = u.display_name;
+      document.getElementById('userUsername').value = u.username;
+      document.getElementById('userUsername').disabled = true;
+      document.getElementById('userPassword').value = '';
+      document.getElementById('userPasswordLabel').textContent = 'Novo geslo (pusti prazno)';
+      document.getElementById('userRole').value = u.role;
+      document.getElementById('userAlert').style.display = 'none';
+      document.getElementById('userModal').classList.add('show');
+    }
+
+    async function saveUser() {
+      const displayName = document.getElementById('userDisplayName').value.trim();
+      const username = document.getElementById('userUsername').value.trim();
+      const password = document.getElementById('userPassword').value;
+      const role = document.getElementById('userRole').value;
+      const alert = document.getElementById('userAlert');
+
+      if (!displayName) {
+        alert.textContent = 'Prikazno ime je obvezno';
+        alert.style.display = 'block';
+        return;
+      }
+
+      try {
+        if (editingUserId) {
+          // Update
+          const body = { displayName, role };
+          if (password) body.password = password;
+          const res = await fetch(`/api/admin/users/${editingUserId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          });
+          if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.error);
+          }
+        } else {
+          // Create
+          if (!username || !password) {
+            alert.textContent = 'Vsa polja so obvezna';
+            alert.style.display = 'block';
+            return;
+          }
+          const res = await fetch('/api/admin/users', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, displayName, role })
+          });
+          if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.error);
+          }
+        }
+
+        closeModal('userModal');
+        loadUsers();
+        loadStats();
+      } catch (err) {
+        alert.textContent = err.message;
+        alert.style.display = 'block';
+      }
+    }
+
+    async function toggleActive(id, currentlyActive) {
+      const action = currentlyActive ? 'deaktivirati' : 'aktivirati';
+      if (!confirm(`Res želiš ${action} tega uporabnika?`)) return;
+      await fetch(`/api/admin/users/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: !currentlyActive })
+      });
+      loadUsers();
+      loadStats();
+    }
+
+    // ─── Sessions ─────────────────────────────────────────────
+    async function loadSessions() {
+      const userId = document.getElementById('filterUser').value;
+      const status = document.getElementById('filterStatus').value;
+
+      let url = '/api/admin/sessions?';
+      if (userId) url += `userId=${userId}&`;
+      if (status) url += `status=${status}&`;
+
+      const res = await fetch(url);
+      const sessions = await res.json();
+
+      const tbody = document.getElementById('sessionsTable');
+      const empty = document.getElementById('sessionsEmpty');
+
+      if (!sessions.length) {
+        tbody.innerHTML = '';
+        empty.style.display = '';
+        return;
+      }
+
+      empty.style.display = 'none';
+      tbody.innerHTML = sessions.map(s => `
+        <tr style="cursor:pointer" onclick="viewSession(${s.id}, '${esc(s.name)}', '${esc(s.display_name)}')">
+          <td><strong>${esc(s.display_name)}</strong></td>
+          <td>${esc(s.name)}</td>
+          <td><span class="badge ${s.status === 'active' ? 'badge-active' : 'badge-completed'}">${s.status === 'active' ? 'Aktivna' : 'Zaključena'}</span></td>
+          <td>${s.item_count || 0}</td>
+          <td>${s.total_quantity || 0}</td>
+          <td>${formatDate(s.created_at)}</td>
+          <td><button class="btn btn-outline btn-sm">👁</button></td>
+        </tr>
+      `).join('');
+    }
+
+    async function viewSession(id, name, userName) {
+      const res = await fetch(`/api/sessions/${id}/items`);
+      const items = await res.json();
+
+      document.getElementById('modalSessionName').textContent = name;
+      document.getElementById('modalSessionMeta').textContent = `Uporabnik: ${userName}`;
+      document.getElementById('modalItems').innerHTML = items.length
+        ? items.map(i => `
+          <tr>
+            <td style="font-family:monospace;font-weight:600">${esc(i.sku)}</td>
+            <td>${i.quantity}</td>
+            <td style="color:var(--text-muted)">${formatTime(i.scanned_at)}</td>
+          </tr>
+        `).join('')
+        : '<tr><td colspan="3" style="text-align:center;color:var(--text-muted)">Ni artiklov</td></tr>';
+
+      document.getElementById('sessionModal').classList.add('show');
+    }
+
+    // ─── Export ────────────────────────────────────────────────
+    function doExport(format) {
+      const userId = document.getElementById('exportUser').value;
+      const status = document.getElementById('exportStatus').value;
+      const from = document.getElementById('exportFrom').value;
+      const to = document.getElementById('exportTo').value;
+
+      let url = `/api/admin/export?format=${format}`;
+      if (userId) url += `&userId=${userId}`;
+      if (status) url += `&status=${status}`;
+      if (from) url += `&from=${from}T00:00:00`;
+      if (to) url += `&to=${to}T23:59:59`;
+
+      window.location.href = url;
+    }
+
+    // ─── All Items ──────────────────────────────────────────
+    let itemsDebounce = null;
+    function debounceLoadItems() {
+      clearTimeout(itemsDebounce);
+      itemsDebounce = setTimeout(loadAllItems, 300);
+    }
+
+    async function loadAllItems() {
+      const search = document.getElementById('itemsSearch').value.trim();
+      const userId = document.getElementById('itemsFilterUser').value;
+
+      let url = '/api/admin/items?';
+      if (search) url += `search=${encodeURIComponent(search)}&`;
+      if (userId) url += `userId=${userId}&`;
+
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error();
+        const items = await res.json();
+
+        const tbody = document.getElementById('allItemsTable');
+        const empty = document.getElementById('allItemsEmpty');
+        const countEl = document.getElementById('itemsResultCount');
+
+        countEl.textContent = items.length >= 500 ? 'Prikazanih prvih 500 zadetkov' : `${items.length} zadetkov`;
+
+        if (!items.length) {
+          tbody.innerHTML = '';
+          empty.style.display = '';
+          return;
+        }
+
+        empty.style.display = 'none';
+        tbody.innerHTML = items.map(i => `
+          <tr>
+            <td style="font-family:monospace;font-weight:600;font-size:1.05rem">${esc(i.sku)}</td>
+            <td>${i.quantity}</td>
+            <td><strong>${esc(i.display_name)}</strong></td>
+            <td>${esc(i.session_name)}</td>
+            <td><span class="badge ${i.session_status === 'active' ? 'badge-active' : 'badge-completed'}">${i.session_status === 'active' ? 'Aktivna' : 'Zaključena'}</span></td>
+            <td>${formatDate(i.scanned_at)}</td>
+          </tr>
+        `).join('');
+      } catch {}
+    }
+
+    // Populate items filter user dropdown after users load
+    function populateItemsUserFilter() {
+      const opts = users.filter(u => u.role === 'user').map(u =>
+        `<option value="${u.id}">${esc(u.display_name)}</option>`
+      ).join('');
+      document.getElementById('itemsFilterUser').innerHTML = '<option value="">Vsi uporabniki</option>' + opts;
+    }
+
+    // ─── Utils ────────────────────────────────────────────────
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('show');
+    }
+
+    function esc(s) {
+      if (!s) return '';
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function formatDate(d) {
+      if (!d) return '';
+      return new Date(d + 'Z').toLocaleDateString('sl-SI', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function formatTime(d) {
+      if (!d) return '';
+      return new Date(d + 'Z').toLocaleTimeString('sl-SI', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+
+    // ─── Theme Toggle ──────────────────────────────────────
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme');
+      const next = current === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('uhihorse_theme', next);
+      document.getElementById('themeBtn').textContent = next === 'light' ? '☀️' : '🌙';
+    }
+    (function applyTheme() {
+      const saved = localStorage.getItem('uhihorse_theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', saved);
+      document.getElementById('themeBtn').textContent = saved === 'light' ? '☀️' : '🌙';
+    })();
+
+    // ─── Init ─────────────────────────────────────────────────
+    checkAuth();
+  </script>
+</body>
+</html>
