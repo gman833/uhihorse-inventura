@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # 🐴 UHIHORSE Inventory System
 
 Sistem za inventuro z QR skeniranjem za UHIHORSE.
@@ -140,3 +141,6 @@ Baza se avtomatsko ustvari v `data/inventory.db`.
 - `GET /api/admin/sessions` - Vse seje (s filtri)
 - `GET /api/admin/stats` - Statistika
 - `GET /api/admin/export?format=xlsx|csv` - Izvoz
+=======
+# uhihorse-inventura
+>>>>>>> 32f92cc9948affa2f8b26f6ef46b0d543a83d1c0
